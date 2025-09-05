@@ -16,6 +16,7 @@ _You **can** combine them_
 
 :smile:
 :angry:
+:alien:
 
 - 항목 1
 - 항목 2
@@ -23,9 +24,9 @@ _You **can** combine them_
   - 소항목 2b
 
 1. Item 1
-1. Item 2
+2. Item 2
    1. Item 2a
-   1. Item 2b
+   2. Item 2b
 
 https://github.com/gitjon136/OSS.git
 
