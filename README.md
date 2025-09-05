@@ -12,14 +12,15 @@ _This will also be italic_
 
 _You **can** combine them_
 
-~~This~~ will appear crossed out.
+~~줄 긋기~~
 
 :smile:
+:angry:
 
-- Item 1
-- Item 2
-  - Item 2a
-  - Item 2b
+- 항목 1
+- 항목 2
+  - 소항목 2a
+  - 소항목 2b
 
 1. Item 1
 1. Item 2
@@ -44,7 +45,7 @@ function fancyAlert(arg) {
 }
 ```
 
-| First Hearder               | Second Header                |
-| --------------------------- | ---------------------------- |
-| Content from cell 1         | Content from cell 2          |
-| Content in the first column | Content in the second column |
+| 1열 | 2열 |
+| --- | --- |
+| 1   | 2   |
+| 3   | 4   |
