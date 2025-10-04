@@ -2,7 +2,7 @@
 
 ## This is an <h2> tag
 
-###### This is an <h6> tag
+#### This is an <h4> tag
 
 _This text will be italic_
 _This will also be italic_
@@ -12,21 +12,19 @@ _This will also be italic_
 
 _You **can** combine them_
 
-~~줄 긋기~~
+~~This~~ will appear crossed out.
 
-:smile:
-:angry:
-:alien:
+:smime:
 
-- 항목 1
-- 항목 2
-  - 소항목 2a
-  - 소항목 2b
+- Item 1
+- Item 2
+  - Item 2a
+  - Item 2b
 
 1. Item 1
-2. Item 2
+1. Item 2
    1. Item 2a
-   2. Item 2b
+   1. Item 2b
 
 https://github.com/gitjon136/OSS.git
 
@@ -35,8 +33,8 @@ As Kanye West said:
 > We're living the future so
 > the present is out past.
 
-I think you should use an
-`<addr>` element here instead.
+I think you should an
+`<addr>' element here instead.
 
 ```javascript
 function fancyAlert(arg) {
@@ -46,7 +44,7 @@ function fancyAlert(arg) {
 }
 ```
 
-| 1열 | 2열 |
-| --- | --- |
-| 1   | 2   |
-| 3   | 4   |
+| First Header                | Second Header                |
+| --------------------------- | ---------------------------- |
+| Content from cell 1         | Content from cell 2          |
+| Content in the first column | Content in the second column |
