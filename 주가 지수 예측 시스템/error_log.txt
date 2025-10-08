@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "C:\Users\Yeongjin\Desktop\대학\3학년\2학기\OSS\OSS\주가 지수 예측 시스템\api.py", line 82, in predict
+    prediction = model.predict(X_latest)
+  File "C:\Users\Yeongjin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0\LocalCache\local-packages\Python310\site-packages\sklearn\ensemble\_forest.py", line 1065, in predict
+    X = self._validate_X_predict(X)
+  File "C:\Users\Yeongjin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0\LocalCache\local-packages\Python310\site-packages\sklearn\ensemble\_forest.py", line 637, in _validate_X_predict
+    X = validate_data(
+  File "C:\Users\Yeongjin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0\LocalCache\local-packages\Python310\site-packages\sklearn\utils\validation.py", line 2929, in validate_data
+    _check_feature_names(_estimator, X, reset=reset)
+  File "C:\Users\Yeongjin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.10_qbz5n2kfra8p0\LocalCache\local-packages\Python310\site-packages\sklearn\utils\validation.py", line 2787, in _check_feature_names
+    raise ValueError(message)
+ValueError: The feature names should match those that were passed during fit.
+Feature names seen at fit time, yet now missing:
+- KOR_Yield_Curve
+- KOR_Yield_Curve_MA20
+- KOR_Yield_Curve_MA5
+- KOR_Yield_Curve_Momentum
+- US_Yield_Curve
+- ...
+
