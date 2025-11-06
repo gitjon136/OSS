@@ -3,63 +3,96 @@ import requests
 import pandas as pd
 
 # --- 웹 화면 구성 ---
-st.set_page_config(layout="wide") # 페이지 레이아웃을 넓게 설정
-st.title("📈 KOSPI 지수 예측 시스템")
+st.set_page_config(layout="centered") # 페이지 레이아웃을 중앙 정렬로 설정
+st.title("📈 주가 지수 예측 시스템")
 st.write("---")
 
-# 화면을 두 개의 컬럼으로 분할
-col1, col2 = st.columns([1, 2])
+# 예측할 지수 목록
+INDEX_OPTIONS = ['KOSPI', 'KOSDAQ', 'S&P500', 'NASDAQ']
 
-with col1:
-    st.write("다양한 경제 지표를 바탕으로 다음 거래일의 KOSPI 종가를 예측합니다.")
-    st.write("아래 버튼을 눌러 다음 거래일의 KOSPI 지수를 예측해보세요.")
+st.write("아래 버튼을 누르면 4대 주요 지수의 다음 거래일을 한 번에 예측합니다.")
+
+# 예측 버튼
+if st.button("🚀 모든 지수 예측하기"):
+    # 이전 결과 초기화
+    if 'results' in st.session_state:
+        del st.session_state['results']
     
-    # 예측 버튼
-    if st.button("🚀 다음 거래일 KOSPI 지수 예측하기"):
-        # 버튼을 누르면 이전 결과 초기화
-        if 'result' in st.session_state:
-            del st.session_state['result']
+    results = {}
+    progress_bar = st.progress(0, text="예측을 시작합니다...")
+
+    # 각 지수별로 API 요청을 보내고 결과 저장
+    for i, index_name in enumerate(INDEX_OPTIONS):
+        progress_text = f"{index_name} 예측을 위해 데이터를 수집하고 모델을 실행하는 중입니다..."
+        progress_bar.progress((i + 0.5) / len(INDEX_OPTIONS), text=progress_text)
         
-        with st.spinner('최신 데이터를 수집하고 모델을 실행하는 중입니다... (약 30초 소요)'):
+        try:
+            api_url = f"http://127.0.0.1:8000/predict/{index_name.lower()}"
+            response = requests.get(api_url, timeout=60) # 타임아웃을 60초로 넉넉하게 설정
+            response.raise_for_status()
+            results[index_name] = response.json()
+        except requests.exceptions.RequestException:
+            st.error(f"{index_name} 예측 실패: API 서버에 연결할 수 없습니다. api.py 서버가 실행 중인지 확인해주세요.")
+            results = {} # 하나라도 실패하면 중단
+            break
+        except Exception:
             try:
-                # FastAPI 서버에 예측 요청 보내기
-                response = requests.get("http://127.0.0.1:8000/predict")
-                response.raise_for_status() # 200번대 상태 코드가 아니면 에러 발생
-                
-                # 세션 상태에 결과 저장
-                st.session_state.result = response.json()
-
-            except requests.exceptions.RequestException as e:
-                st.error(f"API 서버에 연결할 수 없습니다. api.py 서버가 실행 중인지 확인해주세요.")
-            except Exception as e:
-                # FastAPI에서 보낸 상세 에러 메시지를 표시
-                try:
-                    detail = response.json().get('detail', str(e))
-                    st.error(f"예측 중 에러가 발생했습니다: {detail}")
-                except:
-                    st.error(f"예측 중 에러가 발생했습니다: {e}")
+                detail = response.json().get('detail', '알 수 없는 에러')
+                st.error(f"{index_name} 예측 실패: {detail}")
+            except:
+                 st.error(f"{index_name} 예측 실패: 알 수 없는 에러가 발생했습니다.")
+            results = {} # 하나라도 실패하면 중단
+            break
+    
+    if results:
+        progress_bar.progress(1.0, text="모든 예측이 완료되었습니다!")
+        st.session_state.results = results
 
 
-with col2:
-    # st.session_state에 결과가 있으면 화면에 표시
-    if 'result' in st.session_state and st.session_state.result:
-        res = st.session_state.result
-        st.write(f"#### 🎯 예측 결과 ({res['prediction_date']})")
-        
-        # 결과를 3개의 컬럼으로 나눠서 표시
-        res_col1, res_col2, res_col3 = st.columns(3)
-        
-        # [수정된 부분] 백엔드로부터 받은 모든 정보를 st.metric을 이용해 표시
-        res_col1.metric(
-            label="가장 최근 KOSPI 종가",
-            value=f"{res['latest_actual_kospi_close']:,.2f} P"
-        )
-        
-        res_col2.metric(
-            label=f"예상 KOSPI 종가",
-            value=f"{res['predicted_kospi_close']:,.2f} P",
-            delta=f"{res['change_points']:,.2f} P ({res['change_percent']:.2f}%)"
-        )
-        
-        # 세 번째 컬럼은 비워두거나 다른 정보를 추가할 수 있습니다.
-        # res_col3.info("이 예측은 과거 데이터 기반이며, 실제 투자에 대한 조언이 아닙니다.")
+# st.session_state에 결과가 있으면 화면에 표시
+if 'results' in st.session_state and st.session_state.results:
+    st.write("---")
+    st.write("#### 🎯 예측 결과")
+
+    # --- [수정된 부분] 2x2 그리드 생성 ---
+    # 1. 첫 번째 행 (KOSPI, KOSDAQ)
+    top_col1, top_col2 = st.columns(2)
+    
+    with top_col1:
+        res = st.session_state.results.get('KOSPI')
+        if res:
+            st.metric(
+                label=f"KOSPI ({res['prediction_date']})",
+                value=f"{res['predicted_price']:,.2f} P",
+                delta=f"{res['change_points']:,.2f} P ({res['change_percent']:.2f}%)"
+            )
+
+    with top_col2:
+        res = st.session_state.results.get('KOSDAQ')
+        if res:
+            st.metric(
+                label=f"KOSDAQ ({res['prediction_date']})",
+                value=f"{res['predicted_price']:,.2f} P",
+                delta=f"{res['change_points']:,.2f} P ({res['change_percent']:.2f}%)"
+            )
+
+    # 2. 두 번째 행 (S&P 500, NASDAQ)
+    bottom_col1, bottom_col2 = st.columns(2)
+
+    with bottom_col1:
+        res = st.session_state.results.get('S&P500')
+        if res:
+            st.metric(
+                label=f"S&P 500 ({res['prediction_date']})",
+                value=f"{res['predicted_price']:,.2f} P",
+                delta=f"{res['change_points']:,.2f} P ({res['change_percent']:.2f}%)"
+            )
+
+    with bottom_col2:
+        res = st.session_state.results.get('NASDAQ')
+        if res:
+            st.metric(
+                label=f"NASDAQ ({res['prediction_date']})",
+                value=f"{res['predicted_price']:,.2f} P",
+                delta=f"{res['change_points']:,.2f} P ({res['change_percent']:.2f}%)"
+            )
