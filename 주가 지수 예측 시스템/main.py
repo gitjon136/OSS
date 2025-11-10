@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
+from sklearn.ensemble import RandomForestRegressor
 import joblib 
 import requests 
 import warnings
@@ -178,5 +179,29 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
     mae = mean_absolute_error(actual_prices, predicted_prices)
     print(f"-> {ticker_name} 모델의 최종 MAE: {mae:.2f}")
     print(f"'{model_path}' 파일로 모델 저장 완료!")
+    
+    # --- [추가된 부분] 특성 중요도 분석을 위한 랜덤 포레스트 훈련 ---
+    print(f"\n--- {ticker_name} 모델의 특성 중요도 분석 시작 ---")
+    
+    # 랜덤 포레스트 모델 훈련 (GridSearchCV는 시간이 오래 걸리므로 기본 모델 사용)
+    rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf_model.fit(X_train, y_train.ravel()) # y_train을 1차원으로 변경
+    
+    # 특성 중요도 추출
+    importances = rf_model.feature_importances_
+    feature_names = X.columns
+    
+    # DataFrame으로 변환
+    feature_importance_df = pd.DataFrame(
+        {'Feature': feature_names, 'Importance': importances}
+    )
+    
+    # 중요도 순으로 정렬 및 상위 20개 선택
+    feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(20)
+    
+    # CSV 파일로 저장
+    csv_filename = f'{ticker_name.lower()}_features.csv'
+    feature_importance_df.to_csv(csv_filename, index=False)
+    print(f"'{csv_filename}' 파일로 특성 중요도 저장 완료!")
 
 print("\n--- 모든 딥러닝 모델 훈련 및 저장이 완료되었습니다. ---")
