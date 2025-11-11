@@ -111,13 +111,18 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
     
     temp_df[f'Target_Return'] = temp_df[ticker_name].pct_change().shift(-1)
     temp_df.dropna(inplace=True)
-    X = temp_df.drop(f'Target_Return', axis=1)
-    y = temp_df[f'Target_Return']
+    
+    # --- [수정된 부분] ---
+    # 1. 딥러닝과 랜덤포레스트가 공통으로 사용할 2D 데이터 준비
+    X_2d = temp_df.drop(f'Target_Return', axis=1)
+    y_2d = temp_df[f'Target_Return']
 
+    # 2. 딥러닝(Bi-LSTM)을 위한 3D 데이터 준비
+    print(f"[{ticker_name}] 딥러닝 모델용 3D 데이터 생성 중...")
     scaler_X = MinMaxScaler()
     scaler_y = MinMaxScaler()
-    X_scaled = scaler_X.fit_transform(X)
-    y_scaled = scaler_y.fit_transform(y.values.reshape(-1, 1))
+    X_scaled = scaler_X.fit_transform(X_2d)
+    y_scaled = scaler_y.fit_transform(y_2d.values.reshape(-1, 1))
     
     joblib.dump(scaler_X, f'scaler_X_{ticker_name.lower()}.joblib')
     joblib.dump(scaler_y, f'scaler_y_{ticker_name.lower()}.joblib')
@@ -133,6 +138,7 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
     X_train, X_val, X_test = X_tensor[:train_size], X_tensor[train_size:train_size+val_size], X_tensor[train_size+val_size:]
     y_train, y_val, y_test = y_tensor[:train_size], y_tensor[train_size:train_size+val_size], y_tensor[train_size+val_size:]
 
+    # 3. 딥러닝(Bi-LSTM) 모델 훈련
     input_size = X_train.shape[2]
     model = BiLSTMModel(input_size, hidden_size, num_layers, output_size, dropout_prob)
     
@@ -163,9 +169,9 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
         if epochs_no_improve == patience:
             print(f"성능 개선이 없어 {epoch+1}번째 Epoch에서 훈련을 조기 종료합니다.")
             break
-    print(f"{ticker_name} 모델 훈련 완료!")
+    print(f"{ticker_name} 딥러닝 모델 훈련 완료!")
 
-    # 최종 성능 평가
+    # 4. Bi-LSTM 최종 성능 평가
     model.load_state_dict(torch.load(model_path))
     model.eval()
     with torch.no_grad():
@@ -173,35 +179,33 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
     predicted_returns = scaler_y.inverse_transform(predictions_scaled.numpy()).flatten()
     y_test_original_returns = scaler_y.inverse_transform(y_test.numpy()).flatten()
     test_start_index = train_size + val_size + sequence_length
-    X_test_original = X.iloc[test_start_index:]
+    X_test_original = X_2d.iloc[test_start_index:]
     actual_prices = X_test_original[ticker_name] * (1 + y_test_original_returns)
     predicted_prices = X_test_original[ticker_name] * (1 + predicted_returns)
     mae = mean_absolute_error(actual_prices, predicted_prices)
     print(f"-> {ticker_name} 모델의 최종 MAE: {mae:.2f}")
     print(f"'{model_path}' 파일로 모델 저장 완료!")
-    
-    # --- [추가된 부분] 특성 중요도 분석을 위한 랜덤 포레스트 훈련 ---
+
+    # 5. 특성 중요도 분석을 위한 랜덤 포레스트 훈련 (2D 데이터 사용)
     print(f"\n--- {ticker_name} 모델의 특성 중요도 분석 시작 ---")
     
-    # 랜덤 포레스트 모델 훈련 (GridSearchCV는 시간이 오래 걸리므로 기본 모델 사용)
+    # 2D 데이터로 훈련/테스트 분리 (랜덤포레스트 분석용)
+    split_point_rf = int(len(X_2d) * 0.8) 
+    X_train_rf, y_train_rf = X_2d.iloc[:split_point_rf], y_2d.iloc[:split_point_rf]
+    
+    # 2D 데이터로 랜덤 포레스트 훈련
     rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
-    rf_model.fit(X_train, y_train.ravel()) # y_train을 1차원으로 변경
+    rf_model.fit(X_train_rf, y_train_rf) # 2D 데이터로 훈련
     
-    # 특성 중요도 추출
     importances = rf_model.feature_importances_
-    feature_names = X.columns
+    feature_names = X_2d.columns
     
-    # DataFrame으로 변환
-    feature_importance_df = pd.DataFrame(
-        {'Feature': feature_names, 'Importance': importances}
-    )
-    
-    # 중요도 순으로 정렬 및 상위 20개 선택
+    feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
     feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(20)
     
-    # CSV 파일로 저장
     csv_filename = f'{ticker_name.lower()}_features.csv'
     feature_importance_df.to_csv(csv_filename, index=False)
     print(f"'{csv_filename}' 파일로 특성 중요도 저장 완료!")
+    # --- [여기까지 교체] ---
 
 print("\n--- 모든 딥러닝 모델 훈련 및 저장이 완료되었습니다. ---")
