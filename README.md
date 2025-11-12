@@ -1,50 +1,143 @@
-# This is an <h1> tag
+# 주가 지수 예측 시스템
 
-## This is an <h2> tag
+> 본 프로젝트는 4대 주요 주가 지수(KOSPI, KOSDAQ, S&P 500, NASDAQ)의 다음 거래일을 예측하는 풀스택(Full-stack) 시스템입니다.
+>
+> 단순한 예측을 넘어, 딥러닝 모델의 '블랙박스' 한계를 극복하기 위해 **XAI(설명 가능한 AI)** 기법을 도입하여, 모델이 **'왜'** 그렇게 예측했는지 **'예측 근거'**를 시각화하는 것을 핵심 목표로 합니다.
 
-#### This is an <h4> tag
+---
 
-_This text will be italic_
-_This will also be italic_
+## 1. 주요 기능 (Features)
 
-**This text will be bold**
-**This will also be bold**
+본 시스템은 **"미래 예측"**, **"과거 성과 검증"**, **"예측 근거"**라는 3가지 핵심 기능을 사용자 친화적인 UI로 제공합니다.
 
-_You **can** combine them_
+_(UI 실행 화면을 캡처하여 이곳에 삽입하세요. 예: `![UI 실행 예시](screenshot.png)`)_
 
-~~This~~ will appear crossed out.
+1.  **다음 거래일 예측 (Prediction):**
 
-:smime:
+    - 사용자가 4대 지수 중 하나를 선택하면, 시스템이 VIX, 금리차 등 130여 개의 팩터를 실시간으로 수집합니다.
+    - 사전 훈련된 `Bi-LSTM` 딥러닝 모델을 통해 다음 거래일의 예측 지수와 최신 지수 대비 변동률(%)을 계산하여 보여줍니다.
 
-- Item 1
-- Item 2
-  - Item 2a
-  - Item 2b
+2.  **일봉 차트 및 이동평균선 (Chart):**
 
-1. Item 1
-1. Item 2
-   1. Item 2a
-   1. Item 2b
+    - 예측의 '현재 맥락'을 파악할 수 있도록, `Plotly`를 이용한 한국식(양봉-Red, 음봉-Blue) 일봉 차트를 제공합니다.
+    - 차트 위에 5일, 20일, 60일 이동평균선을 함께 시각화하여 단기/중기/장기 추세를 한눈에 파악할 수 있습니다.
 
-https://github.com/gitjon136/OSS.git
+3.  **예측 근거 시각화 (XAI):**
 
-As Kanye West said:
+    - 딥러닝 모델(Bi-LSTM)의 '블랙박스' 한계를 보완하기 위해, `RandomForest`를 '분석기'로 활용했습니다.
+    - 모델이 예측을 수행할 때 **어떤 팩터(힌트)를 가장 중요하게 고려했는지** Top 20 팩터를 한글화된 막대그래프로 시각화하여 '설명 가능성'을 확보했습니다.
 
-> We're living the future so
-> the present is out past.
+4.  **과거 예측 성과 (Backtest):**
+    - 모델의 신뢰도를 증명하기 위해, 훈련에 사용되지 않은 최근 1.5년(15%)의 테스트 기간 동안의 **'실제 가격'**과 **'모델의 예측 가격'**을 하나의 그래프로 비교하여 시각화합니다.
 
-I think you should an
-`<addr>' element here instead.
+---
 
-```javascript
-function fancyAlert(arg) {
-  if (arg) {
-    $.facebox({ div: "#foo" });
-  }
-}
+## 2. 시스템 아키텍처 (System Architecture)
+
+본 시스템은 '모델 훈련', '백엔드 API', '프론트엔드 UI'의 3가지 역할이 명확히 분리된 풀스택 구조로 설계되었습니다.
+
+1.  **`main.py` (모델 훈련소):**
+
+    - `yfinance`, `pandas-datareader` 등 여러 API에서 130여 개의 팩터(데이터)를 100% 자동으로 수집 및 전처리합니다. (VIX, PPI, DXY, 금리차 등 포함, 1년물 금리 제외)
+    - **[Bi-LSTM 훈련]**: 4대 지수별로 '수익률'을 예측하는 4개의 챔피언 모델( `.pth`)을 **사전에 찾은 최적의 하이퍼파라미터**로 훈련합니다.
+    - **[스케일러 저장]**: 딥러닝 모델에 필수적인 8개의 스케일러( `.joblib`)를 저장합니다.
+    - **[XAI 분석]**: `RandomForest`를 '분석기'로 훈련시켜, 각 모델의 '예측 근거'(`_features.csv`)를 저장합니다.
+    - **[백테스팅]**: 최종 모델의 테스트 기간 예측 결과를 `_backtest.csv` 파일로 저장합니다.
+
+2.  **`api.py` (백엔드 / 주방):**
+
+    - `FastAPI`를 기반으로 구축된 고성능 API 서버입니다.
+    - 서버가 시작될 때, `main.py`가 생성한 16개(4\*4)의 파일(모델, 스케일러, CSV)을 모두 메모리에 로드합니다.
+    - `/predict`, `/chart`, `/features`, `/backtest` 4개의 핵심 엔드포인트(주문 창구)를 통해 `ui.py`의 요청을 실시간으로 처리합니다.
+
+3.  **`ui.py` (프론트엔드 / 홀):**
+    - `Streamlit`을 기반으로 구축된 사용자 친화적 웹 대시보드입니다.
+    - 사용자의 '예측하기' 버튼 클릭 시, 4개의 API를 동시에 호출하여 받은 데이터를 3개의 탭(일봉, 근거, 백테스팅)으로 시각화합니다.
+
+---
+
+## 3. 핵심 개발 과정 및 문제 해결 (My Story)
+
+이 프로젝트는 수많은 한계에 부딪히고 이를 해결하는 과정을 통해 완성되었습니다.
+
+### 🥇 1. '수평선' 예측 문제와 '수익률 예측'으로의 재정의
+
+초기 RandomForest 모델은 KOSPI가 과거 '박스권'을 돌파하여 **새로운 최고가 영역**에 진입하자, 더 이상 예측하지 못하고 **수평선 그래프**를 그리는 치명적인 한계를 보였습니다.
+
+이는 모델이 훈련 데이터(2020~2024년)에서 **경험해 본 적 없는 값을 예측하지 못하는 '외삽(Extrapolation) 문제'** 때문이라 진단했습니다.
+
+이 한계를 극복하기 위해, "내일의 **가격(Price)**"을 직접 예측하는 대신 "내일은 몇 **%** 변동할까?"를 맞추는 **'일별 수익률(Return)' 예측 문제**로 접근 방식을 완전히 재정의했습니다. 모델은 3500P라는 가격은 몰라도, '+0.5%'라는 **수익률**은 과거에도 수없이 학습했기 때문입니다. 이 전략은 '수평선' 문제를 완벽히 해결했습니다.
+
+### 🥈 2. 딥러닝(Bi-LSTM) 고도화 및 '노이즈' 제거
+
+'수익률' 예측 전략을 바탕으로, 시계열 패턴 학습에 특화된 `Bi-LSTM` 딥러닝 모델을 도입했습니다.
+
+초기 Bi-LSTM 모델(MAE 25.24)의 성능을 높이기 위해 VIX, PPI, 60/120일선 등 모든 팩터를 추가하자, 오히려 '정보 과다'로 인한 **'노이즈'**가 발생하여 성능이 **MAE 27.51**로 하락했습니다.
+
+이를 해결하기 위해, `RandomForest`를 '분석기'로 활용하여 **'최정예 팩터 Top 30'**을 선별했습니다. 이 '알짜배기' 데이터로만 Bi-LSTM을 훈련시킨 결과, KOSPI MAE를 **22.86**까지 낮추는 **프로젝트 최고 성능**을 달성했습니다.
+
+### 🥉 3. '블랙박스' 문제를 위한 XAI(설명 가능한 AI) 도입
+
+최고 성능의 Bi-LSTM 모델은 "왜?"(Why)를 설명할 수 없는 '블랙박스' 한계가 있었습니다. 이를 해결하기 위해, `RandomForest`를 '예측기'가 아닌 '분석기'로 재활용했습니다.
+
+`main.py`는 Bi-LSTM 훈련 직후, RandomForest를 추가로 훈련시켜 `feature_importances_`를 계산하고, **가장 중요한 Top 20 팩터를 `_features.csv`로 저장**합니다. `ui.py`는 이 '예측 근거'를 시각화함으로써, 사용자가 딥러닝의 예측 결과를 신뢰할 수 있도록 '설명 가능성'을 확보했습니다.
+
+---
+
+## 4. 기술 스택 (Tech Stack)
+
+| 구분                       | 기술 스택                                                    |
+| :------------------------- | :----------------------------------------------------------- |
+| **모델 훈련 (Training)**   | `Python`, `PyTorch (Bi-LSTM)`, `Scikit-learn (RandomForest)` |
+| **데이터 수집 (Data)**     | `yfinance`, `pandas-datareader (FRED)`                       |
+| **데이터 분석 (Analysis)** | `Pandas`, `Numpy`                                            |
+| **백엔드 (Backend)**       | `FastAPI`, `Uvicorn`                                         |
+| **프론트엔드 (Frontend)**  | `Streamlit`, `Plotly`, `Matplotlib`                          |
+| **버전 관리**              | `Git`, `GitHub`                                              |
+| **실행 환경**              | `run_project.bat`                                            |
+
+---
+
+## 5. 실행 방법 (How to Run)
+
+### 1단계: 환경 설정 및 모델 훈련 (최초 1회)
+
+```bash
+# 1. (권장) 이 프로젝트를 위한 새 가상환경을 생성합니다.
+python -m venv venv
+venv\Scripts\activate
+
+# 2. '준비물 목록'을 이용해 모든 라이브러리를 설치합니다.
+pip install -r requirements.txt
+
+# 3. main.py를 실행하여 4개의 모델 파일(.pth)과
+#    16개의 증빙 자료(.joblib, .csv)를 생성합니다.
+python main.py
+
+# 4. 훈련이 완료된 후, run_project.bat 파일을 더블클릭하면
+#    백엔드(주방)와 프론트엔드(홀) 서버가 자동으로 실행됩니다.
+run_project.bat
+
 ```
 
-| First Header                | Second Header                |
-| --------------------------- | ---------------------------- |
-| Content from cell 1         | Content from cell 2          |
-| Content in the first column | Content in the second column |
+### 2단계: 예측 시스템 실행
+
+```bash
+# 4. 훈련이 완료된 후, run_project.bat 파일을 더블클릭하면
+#    백엔드(주방)와 프론트엔드(홀) 서버가 자동으로 실행됩니다.
+run_project.bat
+```
+
+### 2단계에서 .bat파일이 작동하지 않을 경우, 2개의 터미널에서 각각 아래 명령어를 실행합니다
+
+```bash
+# 1. 백엔드(API) 서버 실행
+python -m uvicorn api:app
+
+# 2. 프론트엔드(UI) 서버 실행
+python -m streamlit run ui.py
+```
+
+### 3단계: 확인
+
+웹 브라우저에서 http://localhost:8501 주소로 접속하여 시스템을 사용합니다.

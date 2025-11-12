@@ -31,7 +31,7 @@ FEATURE_NAME_MAP.update(derived_features)
 
 # --- 웹 화면 구성 ---
 st.set_page_config(layout="wide")
-st.title("📈 다중 팩터 기반 주가 지수 예측 시스템")
+st.title("📈 주가 지수 예측 시스템")
 st.write("---")
 
 INDEX_OPTIONS = ['KOSPI', 'KOSDAQ', 'S&P500', 'NASDAQ']

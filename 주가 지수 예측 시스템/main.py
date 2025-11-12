@@ -32,7 +32,7 @@ class BiLSTMModel(nn.Module):
 START_DATE_PD = '2020-01-01'
 END_DATE_PD = pd.Timestamp.now().strftime('%Y-%m-%d')
 
-# [수정] 우리가 찾은 '고정된' 최적의 하이퍼파라미터 사용
+# 하이퍼파라미터 사
 sequence_length = 60
 hidden_size = 128
 num_layers = 2
@@ -104,7 +104,7 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
     X_2d_all = temp_df.drop(f'Target_Return', axis=1) # 모든 팩터
     y_2d = temp_df[f'Target_Return']
 
-    # --- [수정] 4-1. 랜덤 포레스트로 '예측 근거' 및 '최정예 팩터' 추출 ---
+    # --- 4-1. 랜덤 포레스트로 '예측 근거' 및 '최정예 팩터' 추출 ---
     print(f"[{ticker_name}] RandomForest 분석기로 특성 중요도 분석 중...")
     split_point_rf = int(len(X_2d_all) * 0.8) 
     X_train_rf, y_train_rf = X_2d_all.iloc[:split_point_rf], y_2d.iloc[:split_point_rf]
@@ -127,7 +127,7 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
         top_model_features.append(ticker_name) 
     print(f"[{ticker_name}] Bi-LSTM 훈련에 사용할 최정예 팩터 {len(top_model_features)}개를 선별했습니다.")
     
-    # --- [수정] 4-2. '최정예 팩터'로 딥러닝 데이터 전처리 ---
+    # --- 4-2. '최정예 팩터'로 딥러닝 데이터 전처리 ---
     X_2d_selected = X_2d_all[top_model_features] # Top 30개로만 X데이터 재구성
     
     scaler_X = MinMaxScaler(); scaler_y = MinMaxScaler()
@@ -146,12 +146,12 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
     y_train, y_val, y_test = y_tensor[:train_size], y_tensor[train_size:train_size+val_size], y_tensor[train_size+val_size:]
     input_size = X_train.shape[2] # input_size는 30(N_TOP_FEATURES)이 됨
 
-    # --- [수정] 4-3. Optuna 없이 '고정된' 파라미터로 최종 모델 훈련 ---
+    # --- 파라미터로 최종 모델 훈련 ---
     model = BiLSTMModel(input_size, hidden_size, num_layers, output_size, dropout_prob)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     model_path = f'{ticker_name.lower()}_predictor.pth'
-    print(f"[{ticker_name}] 최정예 팩터 + 고정 하이퍼파라미터로 최종 훈련을 시작합니다...")
+    print(f"[{ticker_name}] 최종 훈련을 시작합니다...")
     
     best_val_loss = float('inf'); epochs_no_improve = 0
     for epoch in range(num_epochs):

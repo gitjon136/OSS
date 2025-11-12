@@ -194,7 +194,7 @@ async def get_features(index_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail="특성 파일을 처리하는 중 에러가 발생했습니다.")
 
-# --- 7. 일봉 차트용 API 엔드포인트 ---
+# --- [수정된 부분] 7. 일봉 차트용 API 엔드포인트 ---
 @app.get("/chart/{index_name}")
 async def get_chart_data(index_name: str):
     index_name_upper = index_name.upper()
@@ -212,7 +212,7 @@ async def get_chart_data(index_name: str):
         if df_chart.empty:
             raise HTTPException(status_code=404, detail="차트 데이터를 가져오는 데 실패했습니다.")
         
-        # yfinance의 대소문자 불일치 문제 해결
+        # [핵심 수정] yfinance의 대소문자 불일치 문제 해결
         if isinstance(df_chart.columns, pd.MultiIndex):
             df_chart.columns = [col[0] for col in df_chart.columns]
         df_chart.columns = [str(col).lower() for col in df_chart.columns]
@@ -222,10 +222,11 @@ async def get_chart_data(index_name: str):
             'close': 'Close', 'volume': 'Volume'
         }, inplace=True)
         
-        # --- 이동평균선 계산 ---
+        # --- [새로 추가된 부분] 이동평균선 계산 ---
         df_chart['MA5'] = df_chart['Close'].rolling(window=5).mean()
         df_chart['MA20'] = df_chart['Close'].rolling(window=20).mean()
         df_chart['MA60'] = df_chart['Close'].rolling(window=60).mean()
+        # --- [여기까지 추가] ---
         
         df_chart.reset_index(inplace=True)
         date_col_name = df_chart.columns[0]
