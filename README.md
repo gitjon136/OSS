@@ -10,7 +10,7 @@
 
 본 시스템은 **"미래 예측"**, **"과거 성과 검증"**, **"예측 근거"**라는 3가지 핵심 기능을 사용자 친화적인 UI로 제공합니다.
 
-_(UI 실행 화면을 캡처하여 이곳에 삽입하세요. 예: `![UI 실행 예시](screenshot.png)`)_
+`!capture.png`
 
 1.  **다음 거래일 예측 (Prediction):**
 
@@ -113,10 +113,6 @@ pip install -r requirements.txt
 # 3. main.py를 실행하여 4개의 모델 파일(.pth)과
 #    16개의 증빙 자료(.joblib, .csv)를 생성합니다.
 python main.py
-
-# 4. 훈련이 완료된 후, run_project.bat 파일을 더블클릭하면
-#    백엔드(주방)와 프론트엔드(홀) 서버가 자동으로 실행됩니다.
-run_project.bat
 
 ```
 
