@@ -87,8 +87,6 @@ def read_root():
 
 @app.get("/predict/{index_name}")
 async def predict(index_name: str):
-    # (이하 /predict 코드는 이전과 동일합니다)
-    # ...
     index_name_upper = index_name.upper()
     if index_name_upper not in models:
         raise HTTPException(status_code=404, detail="모델이 로드되지 않았습니다.")
@@ -181,7 +179,6 @@ async def predict(index_name: str):
 
 @app.get("/features/{index_name}")
 async def get_features(index_name: str):
-    # (이하 /features 코드는 이전과 동일합니다)
     index_name_upper = index_name.upper()
     if index_name_upper not in TARGET_TICKERS:
         raise HTTPException(status_code=404, detail="지원하지 않는 지수입니다.")
@@ -197,7 +194,7 @@ async def get_features(index_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail="특성 파일을 처리하는 중 에러가 발생했습니다.")
 
-# --- [수정된 부분] 7. 일봉 차트용 API 엔드포인트 ---
+# --- 7. 일봉 차트용 API 엔드포인트 ---
 @app.get("/chart/{index_name}")
 async def get_chart_data(index_name: str):
     index_name_upper = index_name.upper()
@@ -225,11 +222,10 @@ async def get_chart_data(index_name: str):
             'close': 'Close', 'volume': 'Volume'
         }, inplace=True)
         
-        # --- [새로 추가된 부분] 이동평균선 계산 ---
+        # --- 이동평균선 계산 ---
         df_chart['MA5'] = df_chart['Close'].rolling(window=5).mean()
         df_chart['MA20'] = df_chart['Close'].rolling(window=20).mean()
         df_chart['MA60'] = df_chart['Close'].rolling(window=60).mean()
-        # --- [여기까지 추가] ---
         
         df_chart.reset_index(inplace=True)
         date_col_name = df_chart.columns[0]
@@ -246,7 +242,6 @@ async def get_chart_data(index_name: str):
 
 @app.get("/backtest/{index_name}")
 async def get_backtest_data(index_name: str):
-    # (이하 /backtest 코드는 이전과 동일합니다)
     index_name_upper = index_name.upper()
     if index_name_upper not in TARGET_TICKERS:
         raise HTTPException(status_code=404, detail="지원하지 않는 지수입니다.")

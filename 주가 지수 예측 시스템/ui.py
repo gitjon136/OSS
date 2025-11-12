@@ -129,13 +129,11 @@ if 'predict_result' in st.session_state and st.session_state.predict_result:
             fig_backtest = go.Figure()
             fig_backtest.add_trace(go.Scatter(x=df_backtest['Date'], y=df_backtest['Actual_Price'],
                                             mode='lines', name='실제 가격 (Actual)',
-                                            line=dict(color='skyblue'))) # 실제 가격은 파란색
+                                            line=dict(color='blue'))) 
             
-            # --- [핵심 수정] 예측 가격을 검은색 점선으로 변경 ---
             fig_backtest.add_trace(go.Scatter(x=df_backtest['Date'], y=df_backtest['Predicted_Price'],
                                             mode='lines', name='모델 예측 가격 (Predicted)',
-                                            line=dict(color='black', dash='dash'))) # 색상='black', 스타일='dash'
-            # --- [수정 완료] ---
+                                            line=dict(color='red', dash='dash'))) 
             
             fig_backtest.update_layout(title=f"{res['index_name']} 예측 정확도 백테스팅",
                                        xaxis_title="날짜", yaxis_title="지수")
