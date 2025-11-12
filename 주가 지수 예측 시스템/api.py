@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
-from fastapi.responses import Response # 수동 JSON 응답을 위해 추가
+from fastapi.responses import Response 
 import joblib
 import pandas as pd
 import yfinance as yf
@@ -212,7 +212,7 @@ async def get_chart_data(index_name: str):
         if df_chart.empty:
             raise HTTPException(status_code=404, detail="차트 데이터를 가져오는 데 실패했습니다.")
         
-        # [핵심 수정] yfinance의 대소문자 불일치 문제 해결
+        # yfinance의 대소문자 불일치 문제 해결
         if isinstance(df_chart.columns, pd.MultiIndex):
             df_chart.columns = [col[0] for col in df_chart.columns]
         df_chart.columns = [str(col).lower() for col in df_chart.columns]

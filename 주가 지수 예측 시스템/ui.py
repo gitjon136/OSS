@@ -28,7 +28,6 @@ for feature_name in original_features:
     derived_features[f'{feature_name}_MA120'] = f'{korean_name} (120일 이동평균)'
     derived_features[f'{feature_name}_Momentum'] = f'{korean_name} (변동률)'
 FEATURE_NAME_MAP.update(derived_features)
-# --- [맵 끝] ---
 
 # --- 웹 화면 구성 ---
 st.set_page_config(layout="wide")
@@ -97,8 +96,7 @@ if 'predict_result' in st.session_state and st.session_state.predict_result:
             fig.add_trace(go.Scatter(x=df_chart['Date'], y=df_chart['MA20'], mode='lines', name='20일 이동평균', line=dict(color='green', width=1)))
             fig.add_trace(go.Scatter(x=df_chart['Date'], y=df_chart['MA60'], mode='lines', name='60일 이동평균', line=dict(color='purple', width=1)))
             
-            fig.update_layout(title=f"{res['index_name']} 일봉 차트 (6개월) + 이동평균선",
-                              xaxis_rangeslider_visible=False)
+            fig.update_layout(title=f"{res['index_name']} 일봉 차트 (6개월) + 이동평균선", xaxis_rangeslider_visible=False)
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
@@ -135,6 +133,5 @@ if 'predict_result' in st.session_state and st.session_state.predict_result:
                                             mode='lines', name='모델 예측 가격 (Predicted)',
                                             line=dict(color='red', dash='dash'))) 
             
-            fig_backtest.update_layout(title=f"{res['index_name']} 예측 정확도 백테스팅",
-                                       xaxis_title="날짜", yaxis_title="지수")
+            fig_backtest.update_layout(title=f"{res['index_name']} 예측 정확도 백테스팅", xaxis_title="날짜", yaxis_title="지수")
             st.plotly_chart(fig_backtest, use_container_width=True)
