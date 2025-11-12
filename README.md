@@ -10,7 +10,7 @@
 
 본 시스템은 **"미래 예측"**, **"과거 성과 검증"**, **"예측 근거"**라는 3가지 핵심 기능을 사용자 친화적인 UI로 제공합니다.
 
-![img](capture.png)
+![img](C:\Users\Yeongjin\Desktop\대학\3학년\2학기\OSS\OSS\주가 지수 예측 시스템\capture.png)
 
 1.  **다음 거래일 예측 (Prediction):**
 
