@@ -32,6 +32,7 @@ class BiLSTMModel(nn.Module):
 START_DATE_PD = '2020-01-01'
 END_DATE_PD = pd.Timestamp.now().strftime('%Y-%m-%d')
 
+# [수정] 우리가 찾은 '고정된' 최적의 하이퍼파라미터 사용
 sequence_length = 60
 hidden_size = 128
 num_layers = 2
@@ -40,31 +41,21 @@ dropout_prob = 0.2
 learning_rate = 0.001
 num_epochs = 200
 patience = 10
+N_TOP_FEATURES = 30  # Bi-LSTM 훈련에 사용할 최정예 팩터 수
+N_XAI_FEATURES = 20  # UI에 시각화할 팩터 수
 
 # --- 2. 데이터 수집 (Configuration) ---
 TARGET_TICKERS = {'^KS11': 'KOSPI', '^KQ11': 'KOSDAQ', '^GSPC': 'S&P500', '^IXIC': 'NASDAQ'}
-
-# [수정] yfinance 티커 (VIX 추가)
 EXTRA_TICKERS = {
-    'KRW=X': 'USD_KRW',
-    'CL=F': 'WTI_OIL',
-    'GC=F': 'GOLD',
-    'DX-Y.NYB': 'DXY',
-    '^VIX': 'VIX'
+    'KRW=X': 'USD_KRW', 'CL=F': 'WTI_OIL', 'GC=F': 'GOLD',
+    'DX-Y.NYB': 'DXY', '^VIX': 'VIX'
 }
-
-# [수정] FRED 티커 (미국/한국 1년물 모두 제외)
 FRED_TICKERS = {
-    'DGS10': 'US_10Y_TREASURY',
-    'DGS3MO': 'US_3M_TREASURY',
-    'IRLTLT01KRM156N': 'KOR_10Y_TREASURY',
-    'IR3TIB01KRM156N': 'KOR_3M_TREASURY',
-    'CPIAUCSL': 'US_CPI',
-    'KORCPIALLMINMEI': 'KOR_CPI',
-    'UNRATE': 'US_Unemployment',
-    'LRUNTTTTKRM156S': 'KOR_Unemployment',
-    'UMCSENT': 'US_CSI',
-    'PPIACO': 'US_PPI'
+    'DGS10': 'US_10Y_TREASURY', 'DGS3MO': 'US_3M_TREASURY',
+    'IRLTLT01KRM156N': 'KOR_10Y_TREASURY', 'IR3TIB01KRM156N': 'KOR_3M_TREASURY',
+    'CPIAUCSL': 'US_CPI', 'KORCPIALLMINMEI': 'KOR_CPI',
+    'UNRATE': 'US_Unemployment', 'LRUNTTTTKRM156S': 'KOR_Unemployment',
+    'UMCSENT': 'US_CSI', 'PPIACO': 'US_PPI'
 }
 
 # --- 3. 데이터 수집 및 전처리 ---
@@ -76,7 +67,6 @@ df_market.rename(columns={**TARGET_TICKERS, **EXTRA_TICKERS}, inplace=True)
 df_econ = web.DataReader(list(FRED_TICKERS.keys()), 'fred', START_DATE_PD, END_DATE_PD)
 df_econ.columns = list(FRED_TICKERS.values())
 
-# [수정] 한국 1년물 관련 로직 전체 삭제
 df = df_market.merge(df_econ, left_index=True, right_index=True, how='left')
 
 df.index.name = 'DATE'
@@ -84,7 +74,6 @@ df['US_Yield_Curve'] = df['US_10Y_TREASURY'] - df['US_3M_TREASURY']
 df['KOR_Yield_Curve'] = df['KOR_10Y_TREASURY'] - df['KOR_3M_TREASURY']
 df.ffill(inplace=True); df.bfill(inplace=True)
 
-# 60일, 120일 이동평균선 추가
 for col in df.columns:
     df[f'{col}_MA5'] = df[col].rolling(window=5).mean()
     df[f'{col}_MA20'] = df[col].rolling(window=20).mean()
@@ -96,10 +85,11 @@ df.replace([np.inf, -np.inf], np.nan, inplace=True)
 df.ffill(inplace=True); df.bfill(inplace=True)
 print("전처리 완료!")
 
-# --- 4. 각 지수별로 딥러닝 모델 훈련 및 저장 ---
+# --- 4. 각 지수별로 모델 훈련 및 저장 ---
 for ticker_code, ticker_name in TARGET_TICKERS.items():
-    print(f"\n--- {ticker_name} 딥러닝 모델 훈련 시작 ---")
+    print(f"\n--- {ticker_name} 모델 훈련 시작 ---")
     
+    # 모델별 데이터프레임 및 특성 선택
     all_features = df.copy()
     if ticker_name in ['S&P500', 'NASDAQ']:
         korea_specific_cols = [col for col in all_features.columns if 'KOR' in col or 'KOSPI' in col or 'KOSDAQ' in col]
@@ -111,101 +101,103 @@ for ticker_code, ticker_name in TARGET_TICKERS.items():
     
     temp_df[f'Target_Return'] = temp_df[ticker_name].pct_change().shift(-1)
     temp_df.dropna(inplace=True)
-    
-    # --- [수정된 부분] ---
-    # 1. 딥러닝과 랜덤포레스트가 공통으로 사용할 2D 데이터 준비
-    X_2d = temp_df.drop(f'Target_Return', axis=1)
+    X_2d_all = temp_df.drop(f'Target_Return', axis=1) # 모든 팩터
     y_2d = temp_df[f'Target_Return']
 
-    # 2. 딥러닝(Bi-LSTM)을 위한 3D 데이터 준비
-    print(f"[{ticker_name}] 딥러닝 모델용 3D 데이터 생성 중...")
-    scaler_X = MinMaxScaler()
-    scaler_y = MinMaxScaler()
-    X_scaled = scaler_X.fit_transform(X_2d)
-    y_scaled = scaler_y.fit_transform(y_2d.values.reshape(-1, 1))
+    # --- [수정] 4-1. 랜덤 포레스트로 '예측 근거' 및 '최정예 팩터' 추출 ---
+    print(f"[{ticker_name}] RandomForest 분석기로 특성 중요도 분석 중...")
+    split_point_rf = int(len(X_2d_all) * 0.8) 
+    X_train_rf, y_train_rf = X_2d_all.iloc[:split_point_rf], y_2d.iloc[:split_point_rf]
+    rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf_model.fit(X_train_rf, y_train_rf)
     
+    importances = rf_model.feature_importances_
+    feature_names = X_2d_all.columns
+    feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+    
+    # '예측 근거' CSV 저장 (Top 20)
+    top_xai_features = feature_importance_df.sort_values(by='Importance', ascending=False).head(N_XAI_FEATURES)
+    csv_filename = f'{ticker_name.lower()}_features.csv'
+    top_xai_features.to_csv(csv_filename, index=False)
+    print(f"'{csv_filename}' 파일로 특성 중요도(XAI) 저장 완료!")
+
+    # '최정예 팩터' 리스트 추출 (Top 30)
+    top_model_features = feature_importance_df.sort_values(by='Importance', ascending=False).head(N_TOP_FEATURES)['Feature'].tolist()
+    if ticker_name not in top_model_features:
+        top_model_features.append(ticker_name) 
+    print(f"[{ticker_name}] Bi-LSTM 훈련에 사용할 최정예 팩터 {len(top_model_features)}개를 선별했습니다.")
+    
+    # --- [수정] 4-2. '최정예 팩터'로 딥러닝 데이터 전처리 ---
+    X_2d_selected = X_2d_all[top_model_features] # Top 30개로만 X데이터 재구성
+    
+    scaler_X = MinMaxScaler(); scaler_y = MinMaxScaler()
+    X_scaled = scaler_X.fit_transform(X_2d_selected); y_scaled = scaler_y.fit_transform(y_2d.values.reshape(-1, 1))
     joblib.dump(scaler_X, f'scaler_X_{ticker_name.lower()}.joblib')
     joblib.dump(scaler_y, f'scaler_y_{ticker_name.lower()}.joblib')
-
+    
     X_seq, y_seq = [], []
     for i in range(len(X_scaled) - sequence_length):
         X_seq.append(X_scaled[i:i+sequence_length])
         y_seq.append(y_scaled[i+sequence_length])
     X_seq, y_seq = np.array(X_seq), np.array(y_seq)
     X_tensor = torch.FloatTensor(X_seq); y_tensor = torch.FloatTensor(y_seq)
-
     train_size = int(len(X_tensor) * 0.7); val_size = int(len(X_tensor) * 0.15)
     X_train, X_val, X_test = X_tensor[:train_size], X_tensor[train_size:train_size+val_size], X_tensor[train_size+val_size:]
     y_train, y_val, y_test = y_tensor[:train_size], y_tensor[train_size:train_size+val_size], y_tensor[train_size+val_size:]
+    input_size = X_train.shape[2] # input_size는 30(N_TOP_FEATURES)이 됨
 
-    # 3. 딥러닝(Bi-LSTM) 모델 훈련
-    input_size = X_train.shape[2]
+    # --- [수정] 4-3. Optuna 없이 '고정된' 파라미터로 최종 모델 훈련 ---
     model = BiLSTMModel(input_size, hidden_size, num_layers, output_size, dropout_prob)
-    
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     model_path = f'{ticker_name.lower()}_predictor.pth'
-
+    print(f"[{ticker_name}] 최정예 팩터 + 고정 하이퍼파라미터로 최종 훈련을 시작합니다...")
+    
     best_val_loss = float('inf'); epochs_no_improve = 0
     for epoch in range(num_epochs):
-        model.train()
-        outputs = model(X_train)
-        optimizer.zero_grad()
-        loss = criterion(outputs, y_train)
-        loss.backward()
-        optimizer.step()
+        model.train(); outputs = model(X_train); optimizer.zero_grad()
+        loss = criterion(outputs, y_train); loss.backward(); optimizer.step()
         model.eval()
         with torch.no_grad():
-            val_outputs = model(X_val)
-            val_loss = criterion(val_outputs, y_val)
+            val_outputs = model(X_val); val_loss = criterion(val_outputs, y_val)
         if (epoch+1) % 20 == 0:
             print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}')
         if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            epochs_no_improve = 0
+            best_val_loss = val_loss; epochs_no_improve = 0
             torch.save(model.state_dict(), model_path)
         else:
             epochs_no_improve += 1
         if epochs_no_improve == patience:
             print(f"성능 개선이 없어 {epoch+1}번째 Epoch에서 훈련을 조기 종료합니다.")
             break
-    print(f"{ticker_name} 딥러닝 모델 훈련 완료!")
+    print(f"{ticker_name} 모델 훈련 완료!")
 
-    # 4. Bi-LSTM 최종 성능 평가
+    # --- 4-4. 최종 성능 평가 (백테스팅) ---
     model.load_state_dict(torch.load(model_path))
     model.eval()
     with torch.no_grad():
         predictions_scaled = model(X_test)
     predicted_returns = scaler_y.inverse_transform(predictions_scaled.numpy()).flatten()
     y_test_original_returns = scaler_y.inverse_transform(y_test.numpy()).flatten()
+    
     test_start_index = train_size + val_size + sequence_length
-    X_test_original = X_2d.iloc[test_start_index:]
-    actual_prices = X_test_original[ticker_name] * (1 + y_test_original_returns)
-    predicted_prices = X_test_original[ticker_name] * (1 + predicted_returns)
+    X_test_original_selected = X_2d_selected.iloc[test_start_index:]
+    
+    actual_prices = X_test_original_selected[ticker_name] * (1 + y_test_original_returns)
+    predicted_prices = X_test_original_selected[ticker_name] * (1 + predicted_returns)
     mae = mean_absolute_error(actual_prices, predicted_prices)
     print(f"-> {ticker_name} 모델의 최종 MAE: {mae:.2f}")
     print(f"'{model_path}' 파일로 모델 저장 완료!")
 
-    # 5. 특성 중요도 분석을 위한 랜덤 포레스트 훈련 (2D 데이터 사용)
-    print(f"\n--- {ticker_name} 모델의 특성 중요도 분석 시작 ---")
-    
-    # 2D 데이터로 훈련/테스트 분리 (랜덤포레스트 분석용)
-    split_point_rf = int(len(X_2d) * 0.8) 
-    X_train_rf, y_train_rf = X_2d.iloc[:split_point_rf], y_2d.iloc[:split_point_rf]
-    
-    # 2D 데이터로 랜덤 포레스트 훈련
-    rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
-    rf_model.fit(X_train_rf, y_train_rf) # 2D 데이터로 훈련
-    
-    importances = rf_model.feature_importances_
-    feature_names = X_2d.columns
-    
-    feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
-    feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(20)
-    
-    csv_filename = f'{ticker_name.lower()}_features.csv'
-    feature_importance_df.to_csv(csv_filename, index=False)
-    print(f"'{csv_filename}' 파일로 특성 중요도 저장 완료!")
-    # --- [여기까지 교체] ---
+    # --- 4-5. 백테스팅 결과 저장 (UI용) ---
+    print(f"--- {ticker_name} 모델의 백테스팅 결과 저장 중 ---")
+    df_backtest = pd.DataFrame({
+        'Date': actual_prices.index,
+        'Actual_Price': actual_prices,
+        'Predicted_Price': predicted_prices
+    })
+    backtest_filename = f'{ticker_name.lower()}_backtest.csv'
+    df_backtest.to_csv(backtest_filename, index=False)
+    print(f"'{backtest_filename}' 파일로 백테스팅 결과 저장 완료!")
 
 print("\n--- 모든 딥러닝 모델 훈련 및 저장이 완료되었습니다. ---")

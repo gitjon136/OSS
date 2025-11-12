@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
+from fastapi.responses import Response # 수동 JSON 응답을 위해 추가
 import joblib
 import pandas as pd
 import yfinance as yf
@@ -34,7 +35,7 @@ num_layers = 2
 output_size = 1
 dropout_prob = 0.2
 
-# --- 3. 데이터 수집용 설정 (main.py와 동일하게) ---
+# --- 3. 데이터 수집용 설정 ---
 TARGET_TICKERS = {'KOSPI': '^KS11', 'KOSDAQ': '^KQ11', 'S&P500': '^GSPC', 'NASDAQ': '^IXIC'}
 EXTRA_TICKERS = {
     'KRW=X': 'USD_KRW', 'CL=F': 'WTI_OIL', 'GC=F': 'GOLD',
@@ -79,24 +80,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="주가 지수 예측 API (Bi-LSTM ver.)", lifespan=lifespan)
 
-# --- 5. API 엔드포인트 (/predict) ---
+# --- 5. API 엔드포인트 ---
 @app.get("/")
 def read_root():
     return {"status": "online", "models_loaded": list(models.keys())}
 
 @app.get("/predict/{index_name}")
 async def predict(index_name: str):
+    # (이하 /predict 코드는 이전과 동일합니다)
+    # ...
     index_name_upper = index_name.upper()
     if index_name_upper not in models:
         raise HTTPException(status_code=404, detail="모델이 로드되지 않았습니다.")
     
-    # (이하 예측 로직은 이전과 동일)
     model = models[index_name_upper]
     scaler_X = scalers_X[index_name_upper]
     scaler_y = scalers_y[index_name_upper]
 
     try:
         print(f"\n[{index_name_upper}] 예측을 위한 최신 데이터 수집 및 전처리를 시작합니다...")
+        
         END_DATE_PD = pd.Timestamp.now()
         START_DATE_PD = END_DATE_PD - pd.Timedelta(days=180 + sequence_length)
         
@@ -150,6 +153,7 @@ async def predict(index_name: str):
             
         latest_actual_price = X_latest_df[index_name_upper].iloc[-1]
         predicted_price = latest_actual_price * (1 + predicted_return)
+        
         change_points = predicted_price - latest_actual_price
         change_percent = (change_points / latest_actual_price) * 100
         
@@ -175,9 +179,9 @@ async def predict(index_name: str):
         print(f"예측 중 심각한 에러 발생: {error_details}")
         raise HTTPException(status_code=500, detail=f"예측을 처리하는 중 서버 에러가 발생했습니다: {str(e)}")
 
-# --- 6. [추가된 부분] API 엔드포인트 (/features) ---
 @app.get("/features/{index_name}")
 async def get_features(index_name: str):
+    # (이하 /features 코드는 이전과 동일합니다)
     index_name_upper = index_name.upper()
     if index_name_upper not in TARGET_TICKERS:
         raise HTTPException(status_code=404, detail="지원하지 않는 지수입니다.")
@@ -185,15 +189,76 @@ async def get_features(index_name: str):
     csv_filename = f'{index_name_upper.lower()}_features.csv'
     
     try:
-        # 1. main.py가 저장한 CSV 파일을 읽음
         df_features = pd.read_csv(csv_filename)
-        
-        # 2. DataFrame을 JSON (dict list)으로 변환하여 반환
-        return df_features.to_dict('records')
-    
+        json_string = df_features.to_json(orient='records')
+        return Response(content=json_string, media_type="application/json")
     except FileNotFoundError:
-        print(f"[에러] {csv_filename} 파일을 찾을 수 없습니다.")
-        raise HTTPException(status_code=404, detail=f"'{csv_filename}' 파일을 찾을 수 없습니다. main.py를 실행하여 생성해주세요.")
+        raise HTTPException(status_code=404, detail=f"'{csv_filename}' 파일을 찾을 수 없습니다.")
     except Exception as e:
-        print(f"특성 파일 처리 중 에러 발생: {e}")
         raise HTTPException(status_code=500, detail="특성 파일을 처리하는 중 에러가 발생했습니다.")
+
+# --- [수정된 부분] 7. 일봉 차트용 API 엔드포인트 ---
+@app.get("/chart/{index_name}")
+async def get_chart_data(index_name: str):
+    index_name_upper = index_name.upper()
+    if index_name_upper not in TARGET_TICKERS:
+        raise HTTPException(status_code=404, detail="지원하지 않는 지수입니다.")
+    
+    ticker_code = TARGET_TICKERS[index_name_upper]
+    
+    try:
+        END_DATE_PD = pd.Timestamp.now()
+        START_DATE_PD = END_DATE_PD - pd.Timedelta(days=180) # 최근 6개월
+        
+        df_chart = yf.download(ticker_code, start=START_DATE_PD, end=END_DATE_PD, progress=False, timeout=10)
+        
+        if df_chart.empty:
+            raise HTTPException(status_code=404, detail="차트 데이터를 가져오는 데 실패했습니다.")
+        
+        # [핵심 수정] yfinance의 대소문자 불일치 문제 해결
+        if isinstance(df_chart.columns, pd.MultiIndex):
+            df_chart.columns = [col[0] for col in df_chart.columns]
+        df_chart.columns = [str(col).lower() for col in df_chart.columns]
+        df_chart = df_chart[['open', 'high', 'low', 'close', 'volume']]
+        df_chart.rename(columns={
+            'open': 'Open', 'high': 'High', 'low': 'Low',
+            'close': 'Close', 'volume': 'Volume'
+        }, inplace=True)
+        
+        # --- [새로 추가된 부분] 이동평균선 계산 ---
+        df_chart['MA5'] = df_chart['Close'].rolling(window=5).mean()
+        df_chart['MA20'] = df_chart['Close'].rolling(window=20).mean()
+        df_chart['MA60'] = df_chart['Close'].rolling(window=60).mean()
+        # --- [여기까지 추가] ---
+        
+        df_chart.reset_index(inplace=True)
+        date_col_name = df_chart.columns[0]
+        df_chart.rename(columns={date_col_name: 'Date'}, inplace=True)
+        
+        df_chart['Date'] = df_chart['Date'].dt.strftime('%Y-%m-%dT%H:%M:%S')
+        
+        json_string = df_chart.to_json(orient='records')
+        return Response(content=json_string, media_type="application/json")
+        
+    except Exception as e:
+        print(f"차트 데이터 전송 중 에러 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"차트 데이터를 처리하는 중 에러가 발생했습니다: {str(e)}")
+
+@app.get("/backtest/{index_name}")
+async def get_backtest_data(index_name: str):
+    # (이하 /backtest 코드는 이전과 동일합니다)
+    index_name_upper = index_name.upper()
+    if index_name_upper not in TARGET_TICKERS:
+        raise HTTPException(status_code=404, detail="지원하지 않는 지수입니다.")
+    
+    csv_filename = f'{index_name_upper.lower()}_backtest.csv'
+    
+    try:
+        df_backtest = pd.read_csv(csv_filename)
+        df_backtest['Date'] = pd.to_datetime(df_backtest['Date']).dt.strftime('%Y-%m-%dT%H:%M:%S')
+        json_string = df_backtest.to_json(orient='records')
+        return Response(content=json_string, media_type="application/json")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"'{csv_filename}' 파일을 찾을 수 없습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="백테스트 파일을 처리하는 중 에러가 발생했습니다.")
