@@ -7,8 +7,8 @@ import platform
 
 # --- [한글 변환 맵] ---
 FEATURE_NAME_MAP = {
-    'KOSPI': 'KOSPI (오늘 종가)', 'KOSDAQ': 'KOSDAQ (오늘 종가)',
-    'S&P500': 'S&P 500 (오늘 종가)', 'NASDAQ': 'NASDAQ (오늘 종가)',
+    'KOSPI': 'KOSPI (종가)', 'KOSDAQ': 'KOSDAQ (종가)',
+    'S&P500': 'S&P 500 (종가)', 'NASDAQ': 'NASDAQ (종가)',
     'USD_KRW': '원/달러 환율', 'WTI_OIL': 'WTI 유가', 'GOLD': '금 가격',
     'DXY': '달러 인덱스(DXY)', 'VIX': '변동성 지수(VIX)',
     'US_10Y_TREASURY': '미국 10년물 금리', 'US_3M_TREASURY': '미국 3개월물 금리',
