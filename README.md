@@ -14,7 +14,7 @@
 
 아래 이미지를 클릭하면 **프로젝트 실행 및 시연 영상(YouTube)**을 확인하실 수 있습니다.
 
-[![시연 영상](https://youtu.be/VSXwQHfVAX0)]
+[![시연 영상](https://youtu.be/VSXwQHfVAX0)](https://youtu.be/VSXwQHfVAX0)
 _(위 화면을 클릭하면 유튜브 영상으로 이동합니다)_
 
 ---
